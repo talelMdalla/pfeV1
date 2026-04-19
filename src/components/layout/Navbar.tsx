@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Brain, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 const links = [
   { label: "Plateforme", href: "/#features" },
@@ -9,12 +10,14 @@ const links = [
   { label: "Tarifs", href: "/#pricing" },
   { label: "Évaluation IA", href: "/assessment" },
   { label: "Mentor", href: "/mentor" },
+  { label: "Entreprises", href: "/partners" },
 ];
 
 export const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -64,7 +67,7 @@ export const Navbar = () => {
 
           <div className="hidden lg:flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/dashboard">Connexion</Link>
+              <Link to="/dashboard">{isAuthenticated ? "Mon dashboard" : "Voir la demo"}</Link>
             </Button>
             <Button variant="hero" size="sm" asChild>
               <Link to="/assessment">Commencer</Link>
@@ -93,7 +96,7 @@ export const Navbar = () => {
             ))}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" size="sm" className="flex-1" asChild>
-                <Link to="/dashboard">Connexion</Link>
+                <Link to="/dashboard">{isAuthenticated ? "Mon dashboard" : "Voir la demo"}</Link>
               </Button>
               <Button variant="hero" size="sm" className="flex-1" asChild>
                 <Link to="/assessment">Commencer</Link>

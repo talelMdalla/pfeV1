@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import axios from "axios";
+import { DependencyList, useCallback, useEffect, useState } from "react";
 
 interface UseApiState<T> {
   data: T | null;
@@ -6,9 +7,31 @@ interface UseApiState<T> {
   error: string | null;
 }
 
+interface UseApiOptions {
+  enabled?: boolean;
+}
+
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+}
+
+const getErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError<ApiErrorResponse>(error)) {
+    return error.response?.data?.error || error.response?.data?.message || error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Une erreur est survenue";
+};
+
 export function useApi<T>(
   apiCall: () => Promise<T>,
-  dependencies: any[] = []
+  dependencies: DependencyList = [],
+  options: UseApiOptions = {},
 ) {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
@@ -16,24 +39,29 @@ export function useApi<T>(
     error: null,
   });
 
-  const execute = async () => {
+  const dependencyKey = JSON.stringify(dependencies);
+  const hasAllDependencies = dependencies.every((dependency) => dependency !== undefined);
+
+  const execute = useCallback(async () => {
     setState({ data: null, loading: true, error: null });
     try {
       const result = await apiCall();
       setState({ data: result, loading: false, error: null });
       return result;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Une erreur est survenue';
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
       setState({ data: null, loading: false, error: errorMessage });
       throw error;
     }
-  };
+  }, [apiCall]);
 
   useEffect(() => {
-    if (dependencies.length > 0 && dependencies.every(dep => dep !== undefined)) {
-      execute();
+    const enabled = options.enabled ?? true;
+
+    if (enabled && hasAllDependencies) {
+      void execute();
     }
-  }, dependencies);
+  }, [dependencyKey, execute, hasAllDependencies, options.enabled]);
 
   return {
     ...state,
@@ -43,8 +71,8 @@ export function useApi<T>(
 }
 
 // Hook spécialisé pour les mutations (POST, PUT, DELETE)
-export function useMutation<T, P = any>(
-  apiCall: (params: P) => Promise<T>
+export function useMutation<T, P = unknown>(
+  apiCall: (params: P) => Promise<T>,
 ) {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
@@ -52,18 +80,18 @@ export function useMutation<T, P = any>(
     error: null,
   });
 
-  const mutate = async (params: P) => {
+  const mutate = useCallback(async (params: P) => {
     setState({ data: null, loading: true, error: null });
     try {
       const result = await apiCall(params);
       setState({ data: result, loading: false, error: null });
       return result;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Une erreur est survenue';
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
       setState({ data: null, loading: false, error: errorMessage });
       throw error;
     }
-  };
+  }, [apiCall]);
 
   return {
     ...state,

@@ -1,201 +1,242 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose';
-import swaggerUi from 'swagger-ui-express';
-import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
-import projectRoutes from './routes/projects';
-import mentorRoutes from './routes/mentors';
-import evaluationRoutes from './routes/evaluations';
-import certificationRoutes from './routes/certifications';
+import cors from "cors";
+import dotenv from "dotenv";
+import express, { NextFunction, Request, Response } from "express";
+import mongoose from "mongoose";
+import path from "path";
+import swaggerUi from "swagger-ui-express";
+import authRoutes from "./routes/auth";
+import certificationRoutes from "./routes/certifications";
+import companyRoutes from "./routes/companies";
+import evaluationRoutes from "./routes/evaluations";
+import mentorRoutes from "./routes/mentors";
+import projectRoutes from "./routes/projects";
+import userRoutes from "./routes/users";
 
-dotenv.config({ path: '../.env' });
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/ai-pfe";
 
 // Swagger definition
 const swaggerSpec = {
-  openapi: '3.0.0',
+  openapi: "3.0.0",
   info: {
-    title: 'AI-PFE Platform API',
-    version: '1.0.0',
-    description: 'API for AI-powered PFE supervision platform',
+    title: "AI-PFE Platform API",
+    version: "1.1.0",
+    description: "API for the AI-powered PFE supervision platform",
   },
   servers: [
     {
       url: `http://localhost:${PORT}`,
-      description: 'Development server',
+      description: "Development server",
     },
   ],
   paths: {
-    '/api/auth/register': {
+    "/api/auth/register": {
       post: {
-        summary: 'Register a new user',
-        tags: ['Authentication'],
+        summary: "Register a new user",
+        tags: ["Authentication"],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
+            "application/json": {
               schema: {
-                type: 'object',
-                required: ['email', 'password', 'role'],
+                type: "object",
+                required: ["email", "password", "role"],
                 properties: {
-                  email: { type: 'string', format: 'email' },
-                  password: { type: 'string', minLength: 6 },
-                  role: { type: 'string', enum: ['student', 'mentor', 'admin'] },
-                  profile: { type: 'object' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          201: { description: 'User registered successfully' },
-          500: { description: 'Registration failed' }
-        }
-      }
-    },
-    '/api/auth/login': {
-      post: {
-        summary: 'Login user',
-        tags: ['Authentication'],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['email', 'password'],
-                properties: {
-                  email: { type: 'string', format: 'email' },
-                  password: { type: 'string' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          200: {
-            description: 'Login successful',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    token: { type: 'string' },
-                    user: { type: 'object' }
-                  }
-                }
-              }
-            }
+                  email: { type: "string", format: "email" },
+                  password: { type: "string", minLength: 6 },
+                  role: { type: "string", enum: ["student", "mentor", "admin"] },
+                  profile: { type: "object" },
+                },
+              },
+            },
           },
-          401: { description: 'Invalid credentials' }
-        }
-      }
+        },
+        responses: {
+          201: { description: "User registered successfully" },
+          500: { description: "Registration failed" },
+        },
+      },
     },
-    '/api/evaluations/evaluate': {
+    "/api/auth/login": {
       post: {
-        summary: 'Evaluate student level',
-        tags: ['Evaluations'],
+        summary: "Login user",
+        tags: ["Authentication"],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
+            "application/json": {
               schema: {
-                type: 'object',
+                type: "object",
+                required: ["email", "password"],
                 properties: {
-                  answers: { type: 'array', items: { type: 'string' } }
-                }
-              }
-            }
-          }
+                  email: { type: "string", format: "email" },
+                  password: { type: "string" },
+                },
+              },
+            },
+          },
         },
         responses: {
           200: {
-            description: 'Evaluation completed',
+            description: "Login successful",
             content: {
-              'application/json': {
+              "application/json": {
                 schema: {
-                  type: 'object',
+                  type: "object",
                   properties: {
-                    evaluation: { type: 'string' }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                    token: { type: "string" },
+                    user: { type: "object" },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: "Invalid credentials" },
+        },
+      },
     },
-    '/api/evaluations/recommend-path': {
+    "/api/evaluations/evaluate": {
       post: {
-        summary: 'Recommend personalized path',
-        tags: ['Evaluations'],
+        summary: "Evaluate student level",
+        tags: ["Evaluations"],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
+            "application/json": {
               schema: {
-                type: 'object',
+                type: "object",
                 properties: {
-                  level: { type: 'string' },
-                  interests: { type: 'array', items: { type: 'string' } }
-                }
-              }
-            }
-          }
+                  answers: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
         },
         responses: {
           200: {
-            description: 'Path recommended',
+            description: "Evaluation completed",
             content: {
-              'application/json': {
+              "application/json": {
                 schema: {
-                  type: 'object',
+                  type: "object",
                   properties: {
-                    path: { type: 'string' }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+                    evaluation: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/evaluations/recommend-path": {
+      post: {
+        summary: "Recommend personalized path",
+        tags: ["Evaluations"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  level: { type: "string" },
+                  interests: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "Path recommended",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    path: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 };
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || true,
+    credentials: true,
+  }),
+);
+app.use(express.json({ limit: "1mb" }));
 
 // Swagger UI
-app.use('/api-docs', swaggerUi.serve);
-app.get('/api-docs', swaggerUi.setup(swaggerSpec));
+app.use("/api-docs", swaggerUi.serve);
+app.get("/api-docs", swaggerUi.setup(swaggerSpec));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-pfe')
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+mongoose
+  .connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 4000,
+  })
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((error) => {
+    console.warn("MongoDB connection unavailable, demo mode remains active.", error);
+  });
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/mentors', mentorRoutes);
-app.use('/api/evaluations', evaluationRoutes);
-app.use('/api/certifications', certificationRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/mentors", mentorRoutes);
+app.use("/api/evaluations", evaluationRoutes);
+app.use("/api/certifications", certificationRoutes);
+app.use("/api/companies", companyRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'AI-PFE Backend is running' });
+app.get("/api/health", (_req, res) => {
+  res.json({
+    status: "OK",
+    message: "AI-PFE Backend is running",
+    database: mongoose.connection.readyState === 1 ? "connected" : "demo",
+  });
 });
 
 // Root route
-app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to AI-PFE Backend API', endpoints: ['/api/health', '/api/auth', '/api/users', '/api/projects', '/api/mentors', '/api/evaluations', '/api/certifications'] });
+app.get("/", (_req, res) => {
+  res.json({
+    message: "Welcome to AI-PFE Backend API",
+    mode: mongoose.connection.readyState === 1 ? "database" : "demo",
+    endpoints: [
+      "/api/health",
+      "/api-docs",
+      "/api/auth",
+      "/api/users",
+      "/api/projects",
+      "/api/mentors",
+      "/api/evaluations",
+      "/api/certifications",
+      "/api/companies",
+    ],
+  });
+});
+
+app.use((_req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled error:", error);
+  res.status(500).json({ error: "Internal server error" });
 });
 
 app.listen(PORT, () => {

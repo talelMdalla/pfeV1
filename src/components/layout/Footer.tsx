@@ -9,7 +9,7 @@ export const Footer = () => {
         { label: "Évaluation IA", href: "/assessment" },
         { label: "Dashboard étudiant", href: "/dashboard" },
         { label: "Espace mentor", href: "/mentor" },
-        { label: "Entreprises", href: "/#partners" },
+        { label: "Entreprises", href: "/partners" },
       ],
     },
     {

@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiService, User } from '../services/api';
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { apiService, User } from "../services/api";
 
 interface AuthContextType {
   user: User | null;
@@ -12,11 +12,15 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const STORAGE_KEYS = {
+  token: "token",
+  user: "user",
+} as const;
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -31,42 +35,64 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Vérifier si l'utilisateur est déjà connecté au chargement
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const syncSession = () => {
+      const storedToken = localStorage.getItem(STORAGE_KEYS.token);
+      const storedUser = localStorage.getItem(STORAGE_KEYS.user);
 
-    if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
 
+      if (!storedUser) {
+        setUser(null);
+        return;
+      }
+
+      try {
+        setUser(JSON.parse(storedUser) as User);
+      } catch {
+        setUser(null);
+      }
+    };
+
+    syncSession();
     setIsLoading(false);
+    window.addEventListener("storage", syncSession);
+    window.addEventListener("mentora:session-cleared", syncSession as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", syncSession);
+      window.removeEventListener("mentora:session-cleared", syncSession as EventListener);
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       const response = await apiService.login(email, password);
 
       setToken(response.token);
       setUser(response.user);
-
-      // Sauvegarder dans le localStorage
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-    } catch (error) {
-      throw error;
+      localStorage.setItem(STORAGE_KEYS.token, response.token);
+      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(response.user));
     } finally {
       setIsLoading(false);
     }
   };
 
   const register = async (userData: Omit<User, '_id'>) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      await apiService.register(userData);
-    } catch (error) {
-      throw error;
+      const response = await apiService.register(userData);
+      if (response.token && response.user) {
+        const normalized = {
+          ...response.user,
+          id: response.user.id ?? response.user._id,
+          _id: response.user._id ?? response.user.id,
+        };
+        setToken(response.token);
+        setUser(normalized);
+        localStorage.setItem(STORAGE_KEYS.token, response.token);
+        localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(normalized));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -75,8 +101,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem(STORAGE_KEYS.token);
+    localStorage.removeItem(STORAGE_KEYS.user);
   };
 
   const value = {

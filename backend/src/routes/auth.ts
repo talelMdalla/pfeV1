@@ -1,7 +1,7 @@
-import express from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import bcrypt from "bcryptjs";
+import express from "express";
+import jwt from "jsonwebtoken";
+import User from "../models/User";
 
 const router = express.Router();
 
@@ -39,15 +39,39 @@ const router = express.Router();
  *       500:
  *         description: Registration failed
  */
-router.post('/register', async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     const { email, password, role, profile } = req.body;
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: "Email, mot de passe et role sont requis" });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ error: "Un compte existe deja avec cet email" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ email, password: hashedPassword, role, profile });
     await user.save();
-    res.status(201).json({ message: 'User registered successfully' });
+
+    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET || "secret", {
+      expiresIn: "7d",
+    });
+
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      user: {
+        _id: user._id,
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        profile: user.profile,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ error: "Registration failed" });
   }
 });
 
@@ -89,17 +113,34 @@ router.post('/register', async (req, res) => {
  *       500:
  *         description: Login failed
  */
-router.post('/login', async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email et mot de passe requis" });
+    }
+
     const user = await User.findOne({ email });
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: "Invalid credentials" });
     }
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET || 'secret');
-    res.json({ token, user: { id: user._id, email: user.email, role: user.role } });
+
+    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET || "secret", {
+      expiresIn: "7d",
+    });
+
+    res.json({
+      token,
+      user: {
+        _id: user._id,
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        profile: user.profile,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: "Login failed" });
   }
 });
 

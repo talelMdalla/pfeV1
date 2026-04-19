@@ -1,106 +1,180 @@
-import { Navbar } from "@/components/layout/Navbar";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  Activity, Award, BookOpen, Calendar, CheckCircle2, Code2, FileText,
-  GitBranch, MessageSquare, Sparkles, Target, TrendingUp, Trophy, Users, Zap, Loader2
+  Activity,
+  Award,
+  BookOpen,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Trophy,
+  Users,
+  Zap,
 } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
-import student1 from "@/assets/student-1.jpg";
 import mentor1 from "@/assets/mentor-1.jpg";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useApi } from "@/hooks/useApi";
-import { apiService } from "@/services/api";
+import student1 from "@/assets/student-1.jpg";
 import { toast } from "@/hooks/use-toast";
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  apiService,
+  Certification,
+  MentorRecommendation,
+  Project,
+  StudentEvaluation,
+} from "@/services/api";
 
-const skills = [
-  { name: "React / TypeScript", level: 88 },
-  { name: "Node.js & APIs", level: 76 },
-  { name: "Machine Learning", level: 62 },
-  { name: "Soft skills · Communication", level: 81 },
-  { name: "Architecture cloud", level: 54 },
-];
-
-const milestones = [
-  { title: "Cadrage du sujet PFE", date: "12 oct.", done: true },
-  { title: "Étude bibliographique", date: "28 oct.", done: true },
-  { title: "Architecture & maquettes", date: "15 nov.", done: true },
-  { title: "Prototype fonctionnel", date: "10 déc.", done: false, current: true },
-  { title: "Tests utilisateurs", date: "20 janv.", done: false },
-  { title: "Soutenance", date: "15 fév.", done: false },
-];
+const computeSkillLevel = (skill: string, index: number) => 65 + ((skill.length + index * 7) % 28);
 
 const Dashboard = () => {
   const { user, isAuthenticated } = useAuth();
-  const [evaluations, setEvaluations] = useState([]);
-  const [projects, setProjects] = useState([]);
-
-  const { data: evaluationsData, loading: evaluationsLoading, error: evaluationsError } = useApi(
-    () => apiService.getStudentEvaluations(),
-    [isAuthenticated]
-  );
-
-  const { data: projectsData, loading: projectsLoading, error: projectsError } = useApi(
-    () => apiService.getProjects(),
-    [isAuthenticated]
-  );
-
-  const { data: recommendationsData, loading: recommendationsLoading } = useApi(
-    () => apiService.getMentorRecommendations(),
-    [isAuthenticated]
-  );
-
-  const [recommendations, setRecommendations] = useState([]);
+  const studentId = user?.id ?? user?._id;
+  const studentQueryKey = studentId ?? "guest";
 
   useEffect(() => {
-    document.title = "Dashboard — Mentora.ai";
+    document.title = "Dashboard - Mentora.ai";
+  }, []);
 
-    if (evaluationsData) {
-      setEvaluations(evaluationsData);
-    }
+  const {
+    data: evaluationsData,
+    loading: evaluationsLoading,
+    error: evaluationsError,
+  } = useApi<StudentEvaluation[]>(() => apiService.getStudentEvaluations(studentId), [studentQueryKey], { enabled: true });
 
-    if (projectsData) {
-      setProjects(projectsData);
-    }
+  const latestEvaluation = evaluationsData?.[0] ?? null;
+  const recommendationKey = useMemo(
+    () => [...(latestEvaluation?.interests ?? []), ...(latestEvaluation?.skills ?? [])].join("|"),
+    [latestEvaluation],
+  );
 
-    if (recommendationsData) {
-      setRecommendations(recommendationsData);
-    }
+  const {
+    data: projectsData,
+    loading: projectsLoading,
+    error: projectsError,
+  } = useApi<Project[]>(() => apiService.getProjects(studentId), [studentQueryKey], { enabled: true });
 
+  const {
+    data: recommendationsData,
+    loading: recommendationsLoading,
+    error: recommendationsError,
+  } = useApi<MentorRecommendation[]>(
+    () =>
+      apiService.getMentorRecommendations({
+        interests: latestEvaluation?.interests,
+        skills: latestEvaluation?.skills,
+      }),
+    [recommendationKey],
+    { enabled: true },
+  );
+
+  const {
+    data: certificationsData,
+    loading: certificationsLoading,
+  } = useApi<Certification[]>(() => apiService.getCertifications(studentId), [studentQueryKey], { enabled: true });
+
+  useEffect(() => {
     if (evaluationsError) {
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les évaluations.",
+        title: "Evaluations indisponibles",
+        description: evaluationsError,
         variant: "destructive",
       });
     }
+  }, [evaluationsError]);
 
+  useEffect(() => {
     if (projectsError) {
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les projets.",
+        title: "Projets indisponibles",
+        description: projectsError,
         variant: "destructive",
       });
     }
-  }, [evaluationsData, projectsData, recommendationsData, evaluationsError, projectsError]);
+  }, [projectsError]);
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-serif text-2xl mb-4">Connexion requise</h1>
-          <p className="text-muted-foreground">Veuillez vous connecter pour accéder à votre dashboard.</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (recommendationsError) {
+      toast({
+        title: "Mentors indisponibles",
+        description: recommendationsError,
+        variant: "destructive",
+      });
+    }
+  }, [recommendationsError]);
+
+  const displayName = user?.profile?.name || (isAuthenticated ? "Etudiant" : "Visiteur demo");
+  const evaluations = evaluationsData ?? [];
+  const projects = projectsData ?? [];
+  const recommendations = recommendationsData ?? [];
+  const certifications = certificationsData ?? [];
+  const activeProjects = projects.filter((project) => project.status === "in_progress");
+
+  const exportProfile = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      user: user
+        ? {
+            email: user.email,
+            role: user.role,
+            profile: user.profile,
+          }
+        : null,
+      evaluation: latestEvaluation,
+      projects: projects.map((project) => ({
+        title: project.title,
+        status: project.status,
+        progress: project.progress,
+      })),
+      certifications: certifications.map((certification) => ({
+        title: certification.title,
+        issuedDate: certification.issuedDate,
+        skills: certification.skills,
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mentora-profil-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: "Profil exporté",
+      description: "Un fichier JSON téléchargeable pour votre portfolio ou votre dossier.",
+    });
+  };
+  const completedProjects = projects.filter((project) => project.status === "completed");
+  const skillItems = (latestEvaluation?.skills ?? []).slice(0, 5).map((skill, index) => ({
+    name: skill,
+    level: computeSkillLevel(skill, index),
+  }));
 
   return (
     <div className="min-h-screen">
       <Navbar />
 
       <main className="container pt-32 pb-20 space-y-8">
-        {/* Welcome */}
+        {!isAuthenticated && (
+          <div className="glass rounded-3xl p-5 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+            <div>
+              <p className="font-medium">Mode demo actif</p>
+              <p className="text-sm text-muted-foreground">
+                Le dashboard fonctionne avec les donnees locales de l'evaluation et les jeux de donnees de secours du backend.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/assessment">Relancer l'evaluation</Link>
+            </Button>
+          </div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -108,81 +182,89 @@ const Dashboard = () => {
         >
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <img src={student1} alt={user?.name || "Utilisateur"} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/40" />
+              <img src={student1} alt={displayName} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/40" />
               <div>
-                <p className="text-sm text-muted-foreground">Bonjour 👋</p>
-                <h1 className="font-serif text-4xl">{user?.name || "Utilisateur"}, <span className="text-gradient italic">prêt à avancer</span> ?</h1>
+                <p className="text-sm text-muted-foreground">Bonjour</p>
+                <h1 className="font-serif text-4xl">
+                  {displayName}, <span className="text-gradient italic">pret a avancer</span> ?
+                </h1>
               </div>
             </div>
+            <p className="text-sm text-muted-foreground max-w-2xl">
+              {latestEvaluation?.summary ||
+                "Commencez par l'evaluation IA pour obtenir une roadmap, des recommandations mentors et un suivi PFE personnalise."}
+            </p>
           </div>
           <div className="flex gap-3">
-            <Button variant="glass" size="default"><MessageSquare className="w-4 h-4" />Mentor IA</Button>
-            <Button variant="hero" size="default"><Sparkles className="w-4 h-4" />Reprendre le sprint</Button>
+            <Button variant="glass" size="default" asChild>
+              <Link to="/mentor">
+                <MessageSquare className="w-4 h-4" />
+                Espace mentor
+              </Link>
+            </Button>
+            <Button variant="hero" size="default" asChild>
+              <Link to="/assessment">
+                <Sparkles className="w-4 h-4" />
+                Mettre a jour mon profil
+              </Link>
+            </Button>
           </div>
         </motion.div>
 
-        {/* KPIs */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {evaluationsLoading ? (
-            <div className="col-span-full flex justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            [
-              {
-                icon: Target,
-                label: "Évaluations",
-                value: evaluations.length.toString(),
-                trend: evaluations.length > 0 ? "✅" : "📝",
-                color: "from-primary to-accent"
-              },
-              {
-                icon: Activity,
-                label: "Projets actifs",
-                value: projects.filter((p: any) => p.status === 'in_progress').length.toString(),
-                trend: projects.length > 0 ? "🚀" : "📋",
-                color: "from-accent to-secondary"
-              },
-              {
-                icon: Trophy,
-                label: "Projets terminés",
-                value: projects.filter((p: any) => p.status === 'completed').length.toString(),
-                trend: projects.filter((p: any) => p.status === 'completed').length > 0 ? "🏆" : "⏳",
-                color: "from-secondary to-primary"
-              },
-              {
-                icon: TrendingUp,
-                label: "Score IA",
-                value: evaluations.length > 0 ? "847" : "N/A",
-                trend: evaluations.length > 0 ? "+47" : "Évaluez-vous",
-                color: "from-primary to-secondary"
-              },
-            ].map((k, i) => (
-              <motion.div
-                key={k.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="glass rounded-3xl p-6 relative overflow-hidden group hover:border-primary/40 transition-all"
-              >
-                <div className={`absolute -top-10 -right-10 w-32 h-32 bg-gradient-to-br ${k.color} opacity-10 blur-2xl group-hover:opacity-20 transition`} />
-                <div className="flex justify-between items-start">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${k.color} grid place-items-center`}>
-                    <k.icon className="w-5 h-5 text-primary-foreground" />
-                  </div>
-                  <span className="text-xs font-mono text-success">{k.trend}</span>
+          {[
+            {
+              icon: Target,
+              label: "Evaluations",
+              value: evaluations.length.toString(),
+              trend: latestEvaluation ? `${latestEvaluation.overallScore}/100` : "A lancer",
+              color: "from-primary to-accent",
+            },
+            {
+              icon: Activity,
+              label: "Projets actifs",
+              value: activeProjects.length.toString(),
+              trend: projectsLoading ? "..." : `${projects.length} total`,
+              color: "from-accent to-secondary",
+            },
+            {
+              icon: Trophy,
+              label: "Projets termines",
+              value: completedProjects.length.toString(),
+              trend: completedProjects.length > 0 ? "Livrables valides" : "En preparation",
+              color: "from-secondary to-primary",
+            },
+            {
+              icon: TrendingUp,
+              label: "Certifications",
+              value: certifications.length.toString(),
+              trend: latestEvaluation ? latestEvaluation.profileLabel : "A construire",
+              color: "from-primary to-secondary",
+            },
+          ].map((kpi, index) => (
+            <motion.div
+              key={kpi.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="glass rounded-3xl p-6 relative overflow-hidden group hover:border-primary/40 transition-all"
+            >
+              <div className={`absolute -top-10 -right-10 w-32 h-32 bg-gradient-to-br ${kpi.color} opacity-10 blur-2xl group-hover:opacity-20 transition`} />
+              <div className="flex justify-between items-start">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${kpi.color} grid place-items-center`}>
+                  <kpi.icon className="w-5 h-5 text-primary-foreground" />
                 </div>
-                <div className="mt-4">
-                  <div className="font-serif text-4xl">{k.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{k.label}</div>
-                </div>
-              </motion.div>
-            ))
-          )}
+                <span className="text-xs font-mono text-secondary">{kpi.trend}</span>
+              </div>
+              <div className="mt-4">
+                <div className="font-serif text-4xl">{kpi.value}</div>
+                <div className="text-xs text-muted-foreground mt-1">{kpi.label}</div>
+              </div>
+            </motion.div>
+          ))}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Roadmap */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -191,58 +273,81 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-serif text-2xl">Mes projets</h2>
+                <h2 className="font-serif text-2xl">Roadmap PFE</h2>
                 <p className="text-sm text-muted-foreground">
-                  {projectsLoading ? "Chargement..." : `${projects.length} projet${projects.length > 1 ? 's' : ''}`}
+                  {projectsLoading ? "Chargement..." : `${projects.length} projet${projects.length > 1 ? "s" : ""}`}
                 </p>
               </div>
-              <Button variant="ghost" size="sm">Voir tout</Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/assessment">Rafraichir mon profil</Link>
+              </Button>
             </div>
 
             {projectsLoading ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-10">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : projects.length > 0 ? (
               <div className="space-y-4">
-                {projects.slice(0, 3).map((project: any, i: number) => (
-                  <div key={project._id} className="p-4 rounded-2xl bg-muted/40 border border-border/50">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-medium">{project.title}</h3>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        project.status === 'completed' ? 'bg-success/20 text-success' :
-                        project.status === 'in_progress' ? 'bg-primary/20 text-primary' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {project.status === 'completed' ? 'Terminé' :
-                         project.status === 'in_progress' ? 'En cours' : 'Proposé'}
+                {projects.slice(0, 3).map((project) => (
+                  <div key={project._id || project.title} className="p-5 rounded-2xl bg-muted/40 border border-border/50">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="font-medium">{project.title}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
+                      </div>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          project.status === "completed"
+                            ? "bg-success/20 text-success"
+                            : project.status === "in_progress"
+                              ? "bg-primary/20 text-primary"
+                              : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {project.status === "completed"
+                          ? "Termine"
+                          : project.status === "in_progress"
+                            ? "En cours"
+                            : "Propose"}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-3">{project.description}</p>
-                    <div className="flex items-center justify-between">
+
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Target className="w-3 h-3" />
-                        <span>{project.progress}% complété</span>
+                        <span>{project.progress}% complete</span>
                       </div>
-                      <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-primary rounded-full transition-all duration-500"
-                          style={{ width: `${project.progress}%` }}
-                        />
+                      <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-gradient-primary rounded-full" style={{ width: `${project.progress}%` }} />
                       </div>
                     </div>
+
+                    {project.milestones && project.milestones.length > 0 && (
+                      <div className="grid md:grid-cols-3 gap-3 mt-4">
+                        {project.milestones.slice(0, 3).map((milestone) => (
+                          <div key={milestone.title} className="p-3 rounded-2xl bg-background/40 border border-border/40">
+                            <p className="text-sm font-medium">{milestone.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {milestone.completed ? "Valide" : "A finaliser"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">Aucun projet trouvé</p>
-                <Button variant="outline" size="sm">Créer un projet</Button>
+                <p className="text-muted-foreground mb-4">Aucun projet n'est encore rattache a ce profil.</p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/assessment">Generer une roadmap PFE</Link>
+                </Button>
               </div>
             )}
           </motion.div>
 
-          {/* Mentor card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -250,53 +355,43 @@ const Dashboard = () => {
             className="glass rounded-3xl p-8 relative overflow-hidden"
           >
             <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-primary opacity-20 blur-3xl" />
-            <h2 className="font-serif text-2xl mb-6">Recommandations mentors</h2>
+            <h2 className="font-serif text-2xl mb-6">Mentors recommandes</h2>
 
             {recommendationsLoading ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-10">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : recommendations.length > 0 ? (
               <div className="space-y-4">
-                {recommendations.slice(0, 2).map((rec: any, i: number) => (
-                  <div key={rec._id} className="p-4 rounded-2xl bg-muted/40 border border-border/50">
+                {recommendations.map((recommendation) => (
+                  <div key={recommendation._id} className="p-4 rounded-2xl bg-muted/40 border border-border/50">
                     <div className="flex items-center gap-3 mb-3">
-                      <img src={mentor1} alt="Mentor" className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20" />
+                      <img src={mentor1} alt={recommendation.mentorName} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20" />
                       <div>
-                        <h3 className="font-medium text-sm">Mentor #{i + 1}</h3>
-                        <p className="text-xs text-muted-foreground">Recommandation IA</p>
+                        <h3 className="font-medium text-sm">{recommendation.mentorName}</h3>
+                        <p className="text-xs text-muted-foreground">Match {recommendation.matchScore}%</p>
                       </div>
                     </div>
-                    <p className="text-sm text-foreground/90 mb-3">{rec.message}</p>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        rec.status === 'accepted' ? 'bg-success/20 text-success' :
-                        rec.status === 'pending' ? 'bg-warning/20 text-warning' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {rec.status === 'accepted' ? 'Accepté' :
-                         rec.status === 'pending' ? 'En attente' : 'Rejeté'}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(rec.createdAt).toLocaleDateString('fr-FR')}
-                      </span>
+                    <p className="text-sm text-foreground/90 mb-3">{recommendation.message}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recommendation.expertise.slice(0, 3).map((expertise) => (
+                        <span key={expertise} className="text-xs px-2 py-1 rounded-full glass">
+                          {expertise}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">Aucune recommandation disponible</p>
-                <Button variant="outline" size="sm">Demander une recommandation</Button>
+                <p className="text-muted-foreground mb-4">Aucune recommandation mentor disponible.</p>
               </div>
             )}
-
-            <Button variant="hero" size="sm" className="w-full mt-4">Voir tous les mentors</Button>
           </motion.div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Skills */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -305,43 +400,48 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="font-serif text-2xl">Profil de compétences</h2>
-                <p className="text-sm text-muted-foreground">Analysé en continu par l'IA</p>
+                <h2 className="font-serif text-2xl">Profil de competences</h2>
+                <p className="text-sm text-muted-foreground">Construit a partir de votre derniere evaluation</p>
               </div>
-              <span className="text-xs font-mono px-3 py-1 rounded-full glass text-secondary">Mis à jour il y a 2h</span>
+              <span className="text-xs font-mono px-3 py-1 rounded-full glass text-secondary">
+                {latestEvaluation ? latestEvaluation.profileLabel : "A completer"}
+              </span>
             </div>
-            <div className="space-y-5">
-              {evaluations.length > 0 && evaluations[0].skills ? (
-                evaluations[0].skills.slice(0, 5).map((skill: string, index: number) => {
-                  const level = Math.floor(Math.random() * 40) + 60; // Simulation d'un niveau basé sur les compétences
-                  return (
-                    <div key={skill}>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>{skill}</span>
-                        <span className="font-mono text-muted-foreground">{level}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          whileInView={{ width: `${level}%` }}
-                          viewport={{ once: true }}
-                          transition={{ duration: 1.2, ease: "easeOut" }}
-                          className="h-full bg-gradient-primary rounded-full"
-                        />
-                      </div>
+
+            {evaluationsLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : skillItems.length > 0 ? (
+              <div className="space-y-5">
+                {skillItems.map((skill) => (
+                  <div key={skill.name}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span>{skill.name}</span>
+                      <span className="font-mono text-muted-foreground">{skill.level}%</span>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">Aucune compétence évaluée</p>
-                  <Button variant="outline" size="sm">Faire une évaluation</Button>
-                </div>
-              )}
-            </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        whileInView={{ width: `${skill.level}%` }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.9, ease: "easeOut" }}
+                        className="h-full bg-gradient-primary rounded-full"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">Passez d'abord l'evaluation IA pour generer votre profil.</p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/assessment">Faire une evaluation</Link>
+                </Button>
+              </div>
+            )}
           </motion.div>
 
-          {/* AI Suggestions */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -355,22 +455,29 @@ const Dashboard = () => {
               <h2 className="font-serif text-xl">Suggestions IA</h2>
             </div>
             <ul className="space-y-3">
-              {evaluations.length > 0 && evaluations[0].aiRecommendation ? (
-                <li className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-colors cursor-pointer group">
-                  <Sparkles className="w-4 h-4 text-secondary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="text-sm text-foreground/90">{evaluations[0].aiRecommendation}</span>
-                </li>
+              {latestEvaluation ? (
+                <>
+                  <li className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-colors">
+                    <Sparkles className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
+                    <span className="text-sm text-foreground/90">{latestEvaluation.aiRecommendation}</span>
+                  </li>
+                  {latestEvaluation.recommendedTopics.slice(0, 3).map((topic) => (
+                    <li key={topic} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-colors">
+                      <BookOpen className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
+                      <span className="text-sm text-foreground/90">Explorer un mini-projet ou un livrable autour de {topic}.</span>
+                    </li>
+                  ))}
+                </>
               ) : (
                 <>
                   {[
-                    { icon: Code2, text: "Complétez votre évaluation pour obtenir des recommandations personnalisées" },
-                    { icon: BookOpen, text: "Découvrez les parcours PFE recommandés par l'IA" },
-                    { icon: Zap, text: "Évaluez vos compétences pour un suivi personnalisé" },
-                    { icon: Users, text: "Connectez-vous avec des mentors adaptés à votre profil" },
-                  ].map((s, i) => (
-                    <li key={i} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-colors cursor-pointer group">
-                      <s.icon className="w-4 h-4 text-secondary mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
-                      <span className="text-sm text-foreground/90">{s.text}</span>
+                    { icon: Zap, text: "Lancez l'evaluation initiale pour obtenir un sujet PFE adapte." },
+                    { icon: Users, text: "Recuperez des recommandations mentors basees sur vos centres d'interet." },
+                    { icon: BookOpen, text: "Structurez une roadmap de livrables avant de commencer le stage." },
+                  ].map((suggestion) => (
+                    <li key={suggestion.text} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-muted/40 transition-colors">
+                      <suggestion.icon className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
+                      <span className="text-sm text-foreground/90">{suggestion.text}</span>
                     </li>
                   ))}
                 </>
@@ -379,7 +486,6 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
-        {/* Certifications */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -389,25 +495,44 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="font-serif text-2xl">Certifications acquises</h2>
-              <p className="text-sm text-muted-foreground">Vérifiables on-chain · exportables LinkedIn</p>
+              <p className="text-sm text-muted-foreground">Exportables dans le portfolio et le dossier de candidature.</p>
             </div>
-            <Button variant="outline" size="sm"><FileText className="w-4 h-4" />Exporter CV</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" type="button" onClick={exportProfile}>
+                <FileText className="w-4 h-4" />
+                Exporter le profil
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/partners">Entreprises partenaires</Link>
+              </Button>
+            </div>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { name: "React Avancé", date: "Sept. 2024", color: "from-primary to-accent" },
-              { name: "TypeScript Pro", date: "Oct. 2024", color: "from-accent to-secondary" },
-              { name: "API Design", date: "Oct. 2024", color: "from-secondary to-primary" },
-              { name: "Git Workflow", date: "Nov. 2024", color: "from-primary to-secondary" },
-            ].map((c, i) => (
-              <div key={i} className={`relative rounded-2xl p-5 bg-gradient-to-br ${c.color} text-primary-foreground overflow-hidden`}>
-                <Award className="w-8 h-8 mb-3" />
-                <h4 className="font-serif text-lg">{c.name}</h4>
-                <p className="text-xs opacity-80 mt-1">{c.date}</p>
-                <GitBranch className="absolute -bottom-2 -right-2 w-16 h-16 opacity-10" />
-              </div>
-            ))}
-          </div>
+
+          {certificationsLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : certifications.length > 0 ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {certifications.map((certification) => (
+                <div
+                  key={certification._id || certification.title}
+                  className="relative rounded-2xl p-5 bg-gradient-to-br from-primary to-secondary text-primary-foreground overflow-hidden"
+                >
+                  <Award className="w-8 h-8 mb-3" />
+                  <h4 className="font-serif text-lg">{certification.title}</h4>
+                  <p className="text-xs opacity-80 mt-1">
+                    {new Date(certification.issuedDate).toLocaleDateString("fr-FR")}
+                  </p>
+                  <p className="text-xs opacity-80 mt-3">{certification.skills.slice(0, 2).join(" · ")}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Les certifications apparaitront ici apres validation des parcours.</p>
+            </div>
+          )}
         </motion.div>
       </main>
     </div>
