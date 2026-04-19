@@ -2,9 +2,13 @@ import { Navbar } from "@/components/layout/Navbar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Brain, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowRight, Brain, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useMutation } from "@/hooks/useApi";
+import { apiService } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 
 const questions = [
   {
@@ -60,11 +64,17 @@ const questions = [
 ];
 
 const Assessment = () => {
+  const { user, isAuthenticated } = useAuth();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [done, setDone] = useState(false);
+  const [evaluation, setEvaluation] = useState<any>(null);
 
-  useEffect(() => { document.title = "Évaluation IA — Mentora.ai"; }, []);
+  const evaluateMutation = useMutation(apiService.evaluateStudent);
+
+  useEffect(() => {
+    document.title = "Évaluation IA — Mentora.ai";
+  }, []);
 
   const select = (i: number) => {
     const next = [...answers, i];
@@ -72,7 +82,39 @@ const Assessment = () => {
     if (step < questions.length - 1) {
       setTimeout(() => setStep(step + 1), 200);
     } else {
-      setTimeout(() => setDone(true), 400);
+      setTimeout(() => submitEvaluation(next), 400);
+    }
+  };
+
+  const submitEvaluation = async (finalAnswers: number[]) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Connexion requise",
+        description: "Vous devez être connecté pour effectuer une évaluation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Convertir les réponses en données structurées pour l'API
+      const evaluationData = {
+        skills: finalAnswers.map((answer, index) => questions[index].options[answer]),
+        interests: finalAnswers.slice(0, 2).map((answer, index) => questions[index].options[answer]),
+        goals: finalAnswers.slice(2, 4).map((answer, index) => questions[index + 2].options[answer]),
+        experience: finalAnswers[4] ? questions[4].options[finalAnswers[4]] : "Débutant",
+      };
+
+      const result = await evaluateMutation.mutate(evaluationData);
+      setEvaluation(result);
+      setDone(true);
+    } catch (error) {
+      toast({
+        title: "Erreur lors de l'évaluation",
+        description: "Une erreur est survenue lors de l'analyse de vos réponses.",
+        variant: "destructive",
+      });
+      console.error("Evaluation error:", error);
     }
   };
 
@@ -151,61 +193,70 @@ const Assessment = () => {
               animate={{ opacity: 1, scale: 1 }}
               className="glass-strong rounded-3xl p-8 lg:p-12 space-y-8"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-primary grid place-items-center shadow-glow">
-                  <Sparkles className="w-8 h-8 text-primary-foreground" />
+              {evaluateMutation.loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+                  <h3 className="font-serif text-2xl mb-2">Analyse en cours...</h3>
+                  <p className="text-muted-foreground text-center">
+                    L'IA analyse tes réponses pour créer ton profil personnalisé
+                  </p>
                 </div>
-                <div>
-                  <div className="text-xs font-mono text-secondary uppercase tracking-widest">Profil détecté</div>
-                  <h3 className="font-serif text-3xl">Builder Full-Stack · orienté produit</h3>
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { label: "Score technique", value: 82 },
-                  { label: "Soft skills", value: 76 },
-                  { label: "Innovation", value: 88 },
-                  { label: "Esprit produit", value: 91 },
-                ].map((s) => (
-                  <div key={s.label} className="p-5 rounded-2xl bg-muted/40 border border-border/50">
-                    <div className="flex justify-between mb-2">
-                      <span className="text-sm">{s.label}</span>
-                      <span className="font-mono text-sm text-secondary">{s.value}/100</span>
+              ) : evaluation ? (
+                <>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-primary grid place-items-center shadow-glow">
+                      <Sparkles className="w-8 h-8 text-primary-foreground" />
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${s.value}%` }}
-                        transition={{ duration: 1, delay: 0.3 }}
-                        className="h-full bg-gradient-primary rounded-full"
-                      />
+                    <div>
+                      <div className="text-xs font-mono text-secondary uppercase tracking-widest">Profil détecté</div>
+                      <h3 className="font-serif text-3xl">Profil personnalisé</h3>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20">
-                <h4 className="font-serif text-xl mb-3">🎯 Sujets PFE recommandés</h4>
-                <ul className="space-y-2">
-                  {[
-                    "Plateforme SaaS B2B avec IA conversationnelle intégrée",
-                    "Application mobile temps réel pour la santé connectée",
-                    "Système de recommandation pour e-commerce avec ML",
-                  ].map((s) => (
-                    <li key={s} className="flex items-start gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-secondary mt-0.5 shrink-0" />
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20">
+                    <h4 className="font-serif text-xl mb-3">🎯 Recommandation IA</h4>
+                    <p className="text-foreground/90 leading-relaxed">
+                      {evaluation.aiRecommendation || "Analyse en cours..."}
+                    </p>
+                  </div>
 
-              <Button variant="hero" size="lg" className="w-full" asChild>
-                <Link to="/dashboard">
-                  Découvrir mon dashboard personnalisé <ArrowRight className="w-4 h-4" />
-                </Link>
-              </Button>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {evaluation.skills?.slice(0, 4).map((skill: string, index: number) => (
+                      <div key={skill} className="p-5 rounded-2xl bg-muted/40 border border-border/50">
+                        <div className="flex justify-between mb-2">
+                          <span className="text-sm">Compétence {index + 1}</span>
+                          <span className="font-mono text-sm text-secondary">Détectée</span>
+                        </div>
+                        <div className="text-sm text-foreground/90">{skill}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button variant="hero" size="lg" className="w-full" asChild>
+                    <Link to="/dashboard">
+                      Découvrir mon dashboard personnalisé <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">
+                    Une erreur est survenue lors de l'évaluation. Veuillez réessayer.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => {
+                      setStep(0);
+                      setAnswers([]);
+                      setDone(false);
+                      setEvaluation(null);
+                    }}
+                  >
+                    Recommencer l'évaluation
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
         </div>
